@@ -1,0 +1,377 @@
+openapi: 3.0.3
+info:
+  title: Todo AI Chatbot API
+  description: |
+    API for the AI-powered chatbot that enables natural language task management.
+    All endpoints require JWT authentication via Bearer token.
+  version: 1.0.0
+  contact:
+    name: Phase III Development
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development server
+
+security:
+  - bearerAuth: []
+
+paths:
+  /users/{user_id}/chat:
+    post:
+      summary: Send a chat message
+      description: |
+        Send a message to the AI chatbot and receive a response.
+        Creates a new conversation if conversation_id is not provided.
+        The AI will process the message and may invoke task management tools.
+      operationId: sendChatMessage
+      tags:
+        - Chat
+      parameters:
+        - $ref: '#/components/parameters/userId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+            examples:
+              newConversation:
+                summary: Start new conversation
+                value:
+                  message: "Add a task to buy groceries"
+              continueConversation:
+                summary: Continue existing conversation
+                value:
+                  message: "Mark it as complete"
+                  conversation_id: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Chat response received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+              example:
+                conversation_id: "550e8400-e29b-41d4-a716-446655440000"
+                message:
+                  id: "660e8400-e29b-41d4-a716-446655440001"
+                  role: "assistant"
+                  content: "I've created a new task 'buy groceries' for you."
+                  created_at: "2026-02-08T10:30:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /users/{user_id}/conversations:
+    get:
+      summary: List user conversations
+      description: |
+        Get all conversations for the authenticated user.
+        Returns conversations sorted by most recent activity.
+      operationId: listConversations
+      tags:
+        - Conversations
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Maximum number of conversations to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Number of conversations to skip
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /users/{user_id}/conversations/{conversation_id}:
+    get:
+      summary: Get conversation with messages
+      description: |
+        Get a specific conversation and all its messages.
+        Messages are returned in chronological order.
+      operationId: getConversation
+      tags:
+        - Conversations
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/conversationId'
+      responses:
+        '200':
+          description: Conversation with messages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationDetailResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Delete a conversation
+      description: |
+        Delete a conversation and all its messages.
+        This action cannot be undone.
+      operationId: deleteConversation
+      tags:
+        - Conversations
+      parameters:
+        - $ref: '#/components/parameters/userId'
+        - $ref: '#/components/parameters/conversationId'
+      responses:
+        '204':
+          description: Conversation deleted successfully
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from authentication
+
+  parameters:
+    userId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: |
+        User ID. Must match the user_id in the JWT token.
+        Requests with mismatched user_id return 403 Forbidden.
+
+    conversationId:
+      name: conversation_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Conversation ID
+
+  schemas:
+    ChatRequest:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: User's message to the chatbot
+        conversation_id:
+          type: string
+          format: uuid
+          description: |
+            Optional. ID of existing conversation to continue.
+            If not provided, a new conversation is created.
+
+    ChatResponse:
+      type: object
+      required:
+        - conversation_id
+        - message
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+          description: ID of the conversation (new or existing)
+        message:
+          $ref: '#/components/schemas/Message'
+
+    ConversationListResponse:
+      type: object
+      required:
+        - conversations
+        - total
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConversationSummary'
+        total:
+          type: integer
+          description: Total number of conversations for the user
+
+    ConversationDetailResponse:
+      type: object
+      required:
+        - conversation
+        - messages
+      properties:
+        conversation:
+          $ref: '#/components/schemas/Conversation'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+
+    Conversation:
+      type: object
+      required:
+        - id
+        - user_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ConversationSummary:
+      type: object
+      required:
+        - id
+        - created_at
+        - updated_at
+        - message_count
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+          maxLength: 200
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        message_count:
+          type: integer
+          description: Number of messages in the conversation
+        last_message_preview:
+          type: string
+          maxLength: 100
+          description: Preview of the last message
+
+    Message:
+      type: object
+      required:
+        - id
+        - role
+        - content
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          type: string
+          enum: [user, assistant]
+          description: Who sent the message
+        content:
+          type: string
+          description: Message content
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: Human-readable error message
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "Message content is required"
+
+    Unauthorized:
+      description: Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "Invalid or expired token"
+
+    Forbidden:
+      description: User does not have permission to access this resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "You do not have permission to access this resource"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "Conversation not found"
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            detail: "An unexpected error occurred. Please try again later."
+
+tags:
+  - name: Chat
+    description: Chat messaging endpoints
+  - name: Conversations
+    description: Conversation management endpoints

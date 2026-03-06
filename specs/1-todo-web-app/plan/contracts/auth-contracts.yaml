@@ -1,0 +1,350 @@
+openapi: 3.0.3
+info:
+  title: Authentication & Security API Contracts
+  description: API contracts for JWT-based authentication and authorization
+  version: 1.0.0
+servers:
+  - url: http://localhost:8000/api
+    description: Development server
+paths:
+  /auth/login:
+    post:
+      summary: Login and get JWT token
+      description: Authenticate user credentials and return JWT token
+      responses:
+        '200':
+          description: Login successful, JWT token returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                    description: JWT token for authentication
+                  token_type:
+                    type: string
+                    description: Type of token (typically "bearer")
+        '401':
+          description: Invalid credentials
+  /auth/me:
+    get:
+      summary: Get current user
+      description: Get information about the currently authenticated user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized - Invalid or expired JWT
+  /{user_id}/tasks:
+    get:
+      summary: Get tasks for a user
+      description: Retrieve all tasks for the specified user
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user whose tasks to retrieve
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successful response with user's tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized - Missing or invalid JWT
+        '403':
+          description: Forbidden - User ID in path doesn't match JWT
+        '404':
+          description: User not found
+    post:
+      summary: Create a new task for a user
+      description: Create a new task associated with the specified user
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user to create task for
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request - Invalid input
+        '401':
+          description: Unauthorized - Missing or invalid JWT
+        '403':
+          description: Forbidden - User ID in path doesn't match JWT
+  /{user_id}/tasks/{id}:
+    get:
+      summary: Get a specific task
+      description: Retrieve a specific task by its ID and user ID
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user
+          schema:
+            type: string
+            format: uuid
+        - name: id
+          in: path
+          required: true
+          description: The ID of the task
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successful response with task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized - Missing or invalid JWT
+        '403':
+          description: Forbidden - User ID in path doesn't match JWT or task doesn't belong to user
+        '404':
+          description: Task not found
+    put:
+      summary: Update a task
+      description: Update all properties of a specific task
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user
+          schema:
+            type: string
+            format: uuid
+        - name: id
+          in: path
+          required: true
+          description: The ID of the task
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdate'
+      responses:
+        '200':
+          description: Task updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request - Invalid input
+        '401':
+          description: Unauthorized - Missing or invalid JWT
+        '403':
+          description: Forbidden - User ID in path doesn't match JWT or task doesn't belong to user
+        '404':
+          description: Task not found
+    delete:
+      summary: Delete a task
+      description: Remove a specific task
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user
+          schema:
+            type: string
+            format: uuid
+        - name: id
+          in: path
+          required: true
+          description: The ID of the task
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Task deleted successfully
+        '401':
+          description: Unauthorized - Missing or invalid JWT
+        '403':
+          description: Forbidden - User ID in path doesn't match JWT or task doesn't belong to user
+        '404':
+          description: Task not found
+  /{user_id}/tasks/{id}/complete:
+    patch:
+      summary: Toggle task completion status
+      description: Update the completion status of a specific task
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          description: The ID of the user
+          schema:
+            type: string
+            format: uuid
+        - name: id
+          in: path
+          required: true
+          description: The ID of the task
+          schema:
+            type: string
+            format: uuid
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                completed:
+                  type: boolean
+                  description: Whether the task is completed
+      responses:
+        '200':
+          description: Task completion status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request - Invalid input
+        '401':
+          description: Unauthorized - Missing or invalid JWT
+        '403':
+          description: Forbidden - User ID in path doesn't match JWT or task doesn't belong to user
+        '404':
+          description: Task not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the user
+        email:
+          type: string
+          description: User's email address
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the user was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the user was last updated
+    Task:
+      type: object
+      required:
+        - id
+        - title
+        - completed
+        - user_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the task
+        title:
+          type: string
+          maxLength: 200
+          minLength: 1
+          description: Title of the task
+        description:
+          type: string
+          description: Optional description of the task
+        completed:
+          type: boolean
+          description: Whether the task is completed
+        user_id:
+          type: string
+          format: uuid
+          description: ID of the user who owns this task
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the task was created
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the task was last updated
+    TaskCreate:
+      type: object
+      required:
+        - title
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          minLength: 1
+          description: Title of the task
+        description:
+          type: string
+          description: Optional description of the task
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          minLength: 1
+          description: Updated title of the task
+        description:
+          type: string
+          description: Updated description of the task
+        completed:
+          type: boolean
+          description: Updated completion status of the task
